@@ -1,0 +1,163 @@
+syntax = "proto3";
+
+// Package api specifies a distributed ledger interface.
+//
+// This package describes the Ledger API, which defines how users will interact
+// with the ledger. Various implementations of the actual ledgers can be used,
+// the basic requirements being strict ordering and append only semantics, the
+// interface is completely agnostic to things like single-node vs networking or
+// various degrees of crash or byzantine fault tolerance.
+package api;
+
+// Ledger is the interface of a ledger, specifying how transactions can be read
+// from or appended to the ledger.
+service Ledger {
+    // ReadTransactions reads the requested transactions from the ledger. If no
+    // data is immediately available the request will stall up to the provided
+    // deadline before returning an empty object. If data becomes available
+    // while waiting it will immediately be returned.
+    rpc ReadTransactions(ReadRequest) returns (ReadResult);
+
+	// AppendTransactions append transactions to the ledger in an unspecified
+	// order. Multiple simultaneous append calls will similarly result in
+	// unspecified ordering between the calls. Once the append succeeds,
+	// transactions in subsequent appends are guaranteed to be order strictly
+	// after those in this append.
+	rpc AppendTransactions(AppendRequest) returns (AppendResult);
+
+	// ServerStatus returns info about and status of the local ledger node.
+	rpc ServerStatus(Empty) returns (ServerStatusResult);
+}
+
+// ReadRequest is a request to read certain transactions from the ledger.
+message ReadRequest {
+	// NetworkSeed identifies the ledger. The read will be rejected if this is
+	// set and doesn't match what the ledger has.
+	bytes network_seed = 1;
+
+	// Index is the index of the first transactions to read.
+	int64 index = 2;
+
+	// Count is the maximum number of transactions to read (if available).
+	int64 count = 3;
+}
+
+// ReadResult is the result of a ReadTransactions call.
+message ReadResult {
+    // NetworkSeed identifies the ledger. It will always stay the same for a
+    // given ledger; if it has a surprising value, transactions were read from
+    // a different (or potentially reset) ledger.
+	bytes network_seed = 1;
+
+	// Transactions are sequenced transactions read from the ledger.
+	repeated SequencedTransaction transactions = 2;
+}
+
+// SequencedTransaction is a transaction that has been appended to the ledger
+// and assigned index, timestamp and state hash. It's unique in its index and
+// its fields are guaranteed to never change and be equal on all honest ledger
+// nodes.
+message SequencedTransaction {
+    // Type is the transaction type. This field allows clients to filter out
+    // transactions they don't care about.
+    string type = 1;
+
+	// Index is the transactions index on the ledger. It's unique and without
+	// gaps. Counts from 1 (<= 0 are invalid values).
+	int64 index = 2;
+
+	// Timestamp is time this transaction was appended to the ledger.
+	// Monotonically increasing with Index. Accuracy is implementation
+	// specific, unit is nanoseconds since the Unix epoch.
+	int64 timestamp = 3;
+
+	// Data is the payload of the transaction. The ledger treats this as
+	// arbitrary, unparseable binary data.
+	bytes data = 4;
+
+	// Hash is the SHA256 hash of the concatenation of type and data.
+	bytes hash = 5;
+
+    // StateHash is the SHA256 hash of the concatenation of the previous state
+    // hash and the hash of this transaction. For the first transaction it will
+    // be simply its hash. This provides paranoid clients with a mechanism for
+    // verifying ledger correctness.
+	//
+	// `StateHash = sha256.Sum256(append(previousStateHash, Hash...))`
+	bytes state_hash = 6;
+}
+
+// AppendRequest contains transaction to append to the ledger.
+message AppendRequest {
+    // NetworkSeed identifies the ledger. The request will be rejected if this
+    // is set and doesn't match what the ledger has.
+    bytes network_seed = 1;
+
+	// Transactions are transactions to be appended to the ledger in an
+	// unspecified order.
+	repeated UnsequencedTransaction transactions = 2;
+}
+
+// UnsequencedTransaction is a transaction that hasn't been assigned an index
+// on the ledger yet. No assumptions should be made about when or whether it
+// will be appended to the ledger.
+message UnsequencedTransaction {
+    // Type is the transaction type. This field allows clients to filter out
+    // transactions they don't care about. It can also be used to pass
+    // administration messages to ledger nodes. 
+    string type = 1;
+
+	// Data is the payload of the transaction. The ledger treats this as
+	// arbitrary, unparseable binary data.
+	bytes data = 2;
+
+    // Hash is the SHA256 hash of the concatenation of type and data. The
+    // ledger may fill this in if empty, or reject the transaction if it
+    // doesn't match.
+	bytes hash = 3;
+}
+
+// AppendResult is the result of an append call.
+message AppendResult {
+    // NetworkSeed identifies the ledger. It will always stay the same for a
+    // given ledger; if it has a surprising value, transactions were attempted
+    // appended to a different (or potentially reset) ledger. Such attempts
+    // will be rejected.
+	bytes network_seed = 1;
+
+    // LastIndex is the index assigned by the ledger to the last of the
+    // provided transactions. Any subsequent appends are guaranteed to be order
+    // after this index.
+	int64 last_index = 2;
+}
+
+// Empty as an empty message.
+message Empty {
+}
+
+// ServerStatus is the status of the local ledger node.
+message ServerStatusResult {
+    // NetworkSeed identifies the ledger. It will always stay the same for a
+    // given ledger; if it has an unexpected value, the request was handled by
+    // a different (or potentially reset) ledger.
+	bytes network_seed = 1;
+
+	// NetworkType is an arbitrary string describing the type of the ledger
+	// (eg. "production" or "testing").
+	string network_type = 2;
+
+	// LastIndex is the index of the last transaction appended to the ledger. A
+	// low number indicates that the local node is behind the rest of the
+	// network.
+	int64 last_index = 3;
+
+	// ServerTime is the time as seen by the local ledger node, in nanoseconds
+	// since the Unix epoch.
+	int64 server_time = 4;
+
+	// Ready is a flag indicating if the local node deems itself ready to
+	// handle read and append requests. It can be false if the node is in the
+	// process of catching up to the rest of the network or is experiencing
+	// some other issue.
+	bool ready = 5;
+}
