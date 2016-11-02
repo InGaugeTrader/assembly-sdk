@@ -197,7 +197,7 @@ func (s *Server) appendHandler(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	// Format append response.
-	s.infof("Transactions appended with indexes starting from %d", res.LastIndex)
+	s.infof("Transactions appended with indexes ending at %d", res.LastIndex)
 	w.Header().Add(SymbiontNetworkSeedHeader, hex.EncodeToString(res.NetworkSeed))
 	return json.NewEncoder(w).Encode(&AppendResult{
 		LastIndex: res.LastIndex,
