@@ -13,7 +13,7 @@ Prerequisites:
 * Godep for dependency handling: `$ go get github.com/tools/godep`
 
 Download:
-`$ go get github.com/symbiont-io/assembly-sdk`
+`$ go get -d github.com/symbiont-io/assembly-sdk`
 
 Fetch dependencies:
 `$ cd $GOPATH/src/github.com/symbiont-io/assembly-sdk`
@@ -21,6 +21,9 @@ Fetch dependencies:
 
 Run tests:
 `$ go test ./...`
+
+Compile and install:
+`$ go install`
 
 
 Usage
